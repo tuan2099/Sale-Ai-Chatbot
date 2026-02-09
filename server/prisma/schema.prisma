@@ -1,0 +1,246 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+  STAFF
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  phoneNumber   String?
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          Role      @default(USER)
+  accounts      Account[]
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  customers     Customer[]
+  stores        Store[]
+  notes         Note[]
+  members       StoreMember[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+model Customer {
+  id              String   @id @default(cuid())
+  name            String
+  email           String?
+  phoneNumber     String?
+  gender          Gender?
+  image           String?
+  channel         String   @default("Website")
+  lastInteraction DateTime @default(now())
+  
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  storeId         String?
+  store           Store?   @relation(fields: [storeId], references: [id], onDelete: SetNull)
+
+  conversations   Conversation[]
+  notes           Note[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId])
+  @@index([email])
+  @@index([phoneNumber])
+}
+
+model Store {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  image         String?
+  
+  // AI Agent Config (Advanced)
+  aiName                String   @default("AI Assistant")
+  aiDescription         String?  // Legacy or global prompt
+  aiPriorityInstructions String? // Ưu tiên cao nhất
+  aiIdentity            String?  // Định danh AI
+  aiRequirements        String?  // Yêu cầu cụ thể
+  aiExceptions          String?  // Tình huống đặc biệt
+  aiStyle               String?  // Phong cách trả lời
+
+  // Chat Widget Customization
+  widgetColor           String   @default("#2563eb")
+  widgetImage           String?
+  widgetFont            String   @default("Inter")
+  widgetWelcomeMsg      String   @default("Chào bạn! Tôi có thể giúp gì cho bạn?")
+  widgetSuggestions     String?  // JSON stringified array of suggestions
+  widgetWelcomeSuggestions String? // JSON stringified array of welcome suggestions
+  widgetLeadFields      String   @default("name,email,phoneNumber") // CSV fields: name,email,phoneNumber,address,etc.
+
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  customers     Customer[]
+  knowledge     Knowledge[]
+  conversations Conversation[]
+  tags          Tag[]
+  members       StoreMember[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
+enum KnowledgeType {
+  WEBSITE
+  FILE
+  MANUAL
+}
+
+enum KnowledgeStatus {
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+model Knowledge {
+  id        String          @id @default(cuid())
+  name      String
+  content   String?         @db.Text
+  type      KnowledgeType
+  status    KnowledgeStatus @default(COMPLETED)
+  url       String?
+  fileUrl   String?
+  metadata  Json?
+  
+  storeId   String
+  store     Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@index([storeId])
+}
+
+model Conversation {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  status      String   @default("OPEN") // OPEN, CLOSED
+  lastMessage String?  @db.Text
+  
+  messages    Message[]
+  tags        Tag[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId])
+  @@index([customerId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  role           String // USER, AI, AGENT
+  content        String @db.Text
+  
+  // AI Training & Quality Control
+  rating           Int?      // 1 for Like, -1 for Dislike
+  feedback         String?   @db.Text
+  correctedContent String?   @db.Text
+
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+model Tag {
+  id            String         @id @default(cuid())
+  name          String
+  color         String?        @default("#3b82f6")
+  conversations Conversation[]
+  
+  storeId       String
+  store         Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([name, storeId])
+}
+
+model Note {
+  id         String   @id @default(cuid())
+  content    String   @db.Text
+  
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([customerId])
+}
+
+enum StoreRole {
+  ADMIN
+  AGENT
+}
+
+model StoreMember {
+  id        String    @id @default(cuid())
+  storeId   String
+  store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      StoreRole @default(AGENT)
+  
+  joinedAt  DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([storeId, userId])
+  @@index([storeId])
+  @@index([userId])
+}
