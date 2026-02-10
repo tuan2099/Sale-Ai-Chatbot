@@ -1138,7 +1138,7 @@ export default function StoreDetailsPage() {
                                                             <p className="text-[10px] text-white/80">Trực tuyến</p>
                                                         </div>
                                                     </div>
-                                                    <div className="flex-1 p-4 space-y-4">
+                                                    <div className="flex-1 p-4 space-y-4 overflow-y-auto">
                                                         <div className="flex gap-2">
                                                             <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
                                                                 <Bot className="h-4 w-4 text-gray-400" />
@@ -1147,6 +1147,13 @@ export default function StoreDetailsPage() {
                                                                 {form.watch("widgetWelcomeMsg")}
                                                             </div>
                                                         </div>
+                                                        <div className="flex flex-wrap gap-2 ml-10">
+                                                            {form.watch("widgetSuggestions")?.split("\n").slice(0, 2).map((s, i) => (
+                                                                <div key={i} className="text-[10px] px-2 py-1 bg-white border border-blue-100 text-blue-600 rounded-full">
+                                                                    {s.trim()}
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                     <div className="p-4 border-t">
                                                         <div className="h-10 rounded-full bg-gray-50 border flex items-center px-4 text-gray-400 text-sm">
@@ -1154,7 +1161,12 @@ export default function StoreDetailsPage() {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="absolute bottom-10 right-10">
+                                                <div className="absolute bottom-10 right-10 flex flex-col items-end gap-2">
+                                                    {form.watch("widgetWelcomeSuggestions")?.split("\n").slice(0, 1).map((s, i) => (
+                                                        <div key={i} className="bg-white px-3 py-1.5 rounded-xl rounded-br-none shadow-md border text-[10px] font-medium animate-bounce">
+                                                            {s.trim()}
+                                                        </div>
+                                                    ))}
                                                     <div className="h-14 w-14 rounded-full shadow-lg flex items-center justify-center" style={{ backgroundColor: form.watch("widgetColor") }}>
                                                         <MessageSquare className="h-7 w-7 text-white" />
                                                     </div>

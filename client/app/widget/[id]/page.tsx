@@ -12,6 +12,7 @@ interface StoreConfig {
     widgetColor: string;
     widgetImage: string;
     widgetWelcomeMsg: string;
+    widgetSuggestions: string;
     widgetWelcomeSuggestions: string;
     widgetFont: string;
 }
@@ -23,6 +24,7 @@ export default function WidgetPage() {
     const [messages, setMessages] = useState<{ role: "AI" | "USER"; content: string }[]>([]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(true);
+    const [randomizedSuggestions, setRandomizedSuggestions] = useState<string[]>([]);
 
     useEffect(() => {
         // Dynamic Font Loading
@@ -45,6 +47,14 @@ export default function WidgetPage() {
                 if (res.ok) {
                     const data = await res.json();
                     setConfig(data);
+
+                    // Randomize suggestions once on load
+                    if (data.widgetSuggestions) {
+                        const allSuggestions = data.widgetSuggestions.split("\n")
+                            .map((s: string) => s.trim())
+                            .filter((s: string) => s.length > 0);
+                        setRandomizedSuggestions(allSuggestions.sort(() => Math.random() - 0.5).slice(0, 3));
+                    }
 
                     // Load from localStorage or set default
                     const savedMessages = localStorage.getItem(`chat_${params.id}`);
@@ -115,7 +125,11 @@ export default function WidgetPage() {
     if (loading) return null;
     if (!config) return <div className="text-gray-400 p-4 text-xs">Widget not available</div>;
 
-    const suggestions = config.widgetWelcomeSuggestions ? config.widgetWelcomeSuggestions.split("\n").filter(s => s.trim()) : [];
+    const welcomeSuggestions = config.widgetWelcomeSuggestions
+        ? config.widgetWelcomeSuggestions.split("\n")
+            .map(s => s.trim())
+            .filter(s => s.length > 0)
+        : [];
 
     return (
         <div
@@ -186,33 +200,20 @@ export default function WidgetPage() {
                             </div>
                         ))}
 
-                        {messages.length === 1 && messages[0].role === "AI" && config.widgetWelcomeSuggestions && (
+                        {messages.length === 1 && messages[0].role === "AI" && randomizedSuggestions.length > 0 && (
                             <div className="flex flex-wrap gap-2 ml-10">
-                                {config.widgetWelcomeSuggestions.split(',').map((s, i) => (
+                                {randomizedSuggestions.map((s, i) => (
                                     <button
                                         key={i}
-                                        onClick={() => handleSend(s.trim())}
-                                        className="text-[11px] px-3 py-1.5 bg-white border border-blue-100 text-blue-600 rounded-full hover:bg-blue-50 transition-colors shadow-sm"
-                                    >
-                                        {s.trim()}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        {messages.length === 1 && suggestions.length > 0 && (
-                            <div className="flex flex-wrap gap-2 pt-2">
-                                {suggestions.map((s, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => { setInput(s); handleSend(); }}
-                                        className="text-xs px-3 py-1.5 bg-white border border-gray-200 rounded-full hover:border-blue-500 hover:text-blue-500 transition-all shadow-sm"
+                                        onClick={() => handleSend(s)}
+                                        className="text-[11px] px-3 py-1.5 bg-white border border-blue-100 text-blue-600 rounded-full hover:bg-blue-50 transition-colors shadow-sm text-left"
                                     >
                                         {s}
                                     </button>
                                 ))}
                             </div>
                         )}
+
                         {isTyping && (
                             <div className="flex gap-2 mb-4 justify-start">
                                 <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 overflow-hidden shadow-sm animate-pulse">
@@ -257,6 +258,21 @@ export default function WidgetPage() {
                             Cung cấp bởi <span className="font-bold text-blue-600 opacity-70">Sale Chatbot AI</span>
                         </p>
                     </div>
+                </div>
+            )}
+
+            {/* Welcome Bubbles next to Button */}
+            {!isOpen && welcomeSuggestions.length > 0 && (
+                <div className="flex flex-col items-end gap-2 mb-4 animate-in fade-in slide-in-from-right-5 duration-700 delay-300">
+                    {welcomeSuggestions.slice(0, 2).map((s, i) => (
+                        <div
+                            key={i}
+                            onClick={() => { setIsOpen(true); handleSend(s); }}
+                            className="bg-white px-4 py-2 rounded-2xl rounded-br-none shadow-lg border border-gray-100 text-xs font-medium text-gray-800 cursor-pointer hover:bg-gray-50 transition-all hover:-translate-x-1"
+                        >
+                            {s}
+                        </div>
+                    ))}
                 </div>
             )}
 
