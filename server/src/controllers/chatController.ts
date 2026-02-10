@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { OpenAI } from 'openai';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
 
@@ -10,10 +11,16 @@ const prisma = new PrismaClient();
 // Initialize Gemini
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
+// Initialize OpenAI
+const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || "",
+});
+
 export const handleChatMessage = async (req: Request, res: Response): Promise<void> => {
     try {
         const storeId = req.params.storeId as string;
         const { message, history, customerInfo } = req.body;
+        const provider = process.env.AI_PROVIDER?.toLowerCase() || 'gemini';
 
         if (!message) {
             res.status(400).json({ message: 'Message is required' });
@@ -39,7 +46,7 @@ export const handleChatMessage = async (req: Request, res: Response): Promise<vo
         }
 
         if (!customer) {
-            customer = await prisma.customer.create({
+            customer = await (prisma as any).customer.create({
                 data: {
                     name: customerInfo?.name || "Guest Customer",
                     email: customerInfo?.email || null,
@@ -105,22 +112,53 @@ ${knowledgeContext || "No specific data."}
 LƯU Ý: Trả lời bằng Tiếng Việt. Chỉ nói về cửa hàng.
 `;
 
-        // 7. Call Gemini
-        const model = genAI.getGenerativeModel({
-            model: "gemini-1.5-flash",
-            systemInstruction: systemPrompt
-        });
+        let aiText = "";
 
-        const chat = model.startChat({
-            history: history?.map((h: any) => ({
+        // 7. Call AI Provider
+        if (provider === 'openai') {
+            // OpenAI implementation
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                ...(history?.map((h: any) => ({
+                    role: h.role === 'USER' ? 'user' : 'assistant',
+                    content: h.content,
+                })) || []),
+                { role: 'user', content: message }
+            ];
+
+            const completion = await openai.chat.completions.create({
+                model: "gpt-4o-mini", // Use mini as a faster/cheaper default
+                messages: messages as any,
+            });
+
+            aiText = completion.choices[0].message.content || "Xin lỗi, đã có lỗi xảy ra.";
+        } else {
+            // Gemini implementation (Default)
+            const model = genAI.getGenerativeModel({
+                model: "gemini-2.0-flash-lite",
+                systemInstruction: systemPrompt
+            });
+
+            const chatHistory = history?.map((h: any) => ({
                 role: h.role === 'USER' ? 'user' : 'model',
                 parts: [{ text: h.content }],
-            })) || [],
-        });
+            })) || [];
 
-        const result = await chat.sendMessage(message);
-        const response = await result.response;
-        const aiText = response.text();
+            // Gemini requires history to start with a 'user' message
+            // If the first message is from the model, we filter it out until we find a user message
+            let filteredHistory = chatHistory;
+            while (filteredHistory.length > 0 && filteredHistory[0].role !== 'user') {
+                filteredHistory.shift();
+            }
+
+            const chat = model.startChat({
+                history: filteredHistory,
+            });
+
+            const result = await chat.sendMessage(message);
+            const response = await result.response;
+            aiText = response.text();
+        }
 
         // 8. Save AI Message & Update Conversation
         await (prisma as any).message.create({
