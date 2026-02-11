@@ -40,8 +40,8 @@ export function Sidebar() {
     return (
         <div className="flex flex-col h-full bg-white border-r w-64 dark:bg-gray-900 overflow-y-auto">
             <div className="p-6 border-b">
-                <Link href="/dashboard" className="flex items-center gap-2 font-bold text-2xl text-blue-600">
-                    <span>SALE AI</span>
+                <Link href="/dashboard" className="flex items-center gap-2 font-bold text-xl text-blue-600">
+                    <span>AI AGENT PLATFORM</span>
                 </Link>
             </div>
             <nav className="flex-1 p-4 space-y-2">

@@ -107,21 +107,36 @@ export const addWebsiteKnowledge = async (req: AuthRequest, res: Response): Prom
         }
 
         // Basic Fetching (Node 18+)
-        const response = await fetch(url);
+        const response = await fetch(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+
         if (!response.ok) {
             res.status(400).json({ message: 'Could not fetch URL' });
             return;
         }
 
         const html = await response.text();
+        const cheerio = require('cheerio');
+        const $ = cheerio.load(html);
 
-        // Very basic HTML text extraction
-        const content = html
-            .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, '')
-            .replace(/<style\b[^>]*>([\s\S]*?)<\/style>/gim, '')
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim();
+        // Remove scripts, styles, and other unnecessary elements
+        $('script').remove();
+        $('style').remove();
+        $('noscript').remove();
+        $('iframe').remove();
+        $('nav').remove(); // Optional: remove navigation
+        $('footer').remove(); // Optional: remove footer
+
+        // Extract text from body
+        const content = $('body').text().replace(/\s+/g, ' ').trim();
+
+        if (!content || content.length < 50) {
+            res.status(400).json({ message: 'Website content is too short or empty' });
+            return;
+        }
 
         const item = await (prisma as any).knowledge.create({
             data: {

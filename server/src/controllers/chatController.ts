@@ -19,13 +19,17 @@ const openai = new OpenAI({
 export const handleChatMessage = async (req: Request, res: Response): Promise<void> => {
     try {
         const storeId = req.params.storeId as string;
-        const { message, history, customerInfo } = req.body;
+        const { message, history, customerInfo, conversationId } = req.body;
         const provider = process.env.AI_PROVIDER?.toLowerCase() || 'gemini';
 
         if (!message) {
             res.status(400).json({ message: 'Message is required' });
             return;
         }
+
+        console.log(`[CHAT LOG] Message from Public Widget for Store: ${storeId}`);
+        console.log(`[CHAT LOG] Received conversationId: ${conversationId || 'null'}`);
+        console.log(`[CHAT LOG] Raw Body:`, JSON.stringify(req.body));
 
         // 1. Fetch Store Config
         const store = await prisma.store.findUnique({
@@ -39,7 +43,22 @@ export const handleChatMessage = async (req: Request, res: Response): Promise<vo
 
         // 2. Find or Create Customer
         let customer;
-        if (customerInfo?.email) {
+        let existingConversation = null;
+
+        if (conversationId) {
+            existingConversation = await (prisma as any).conversation.findUnique({
+                where: { id: conversationId },
+                include: { customer: true }
+            });
+            if (existingConversation) {
+                console.log(`[CHAT LOG] Found existing conversation: ${existingConversation.id}`);
+                customer = existingConversation.customer;
+            } else {
+                console.log(`[CHAT LOG] conversationId ${conversationId} not found in DB`);
+            }
+        }
+
+        if (!customer && customerInfo?.email) {
             customer = await prisma.customer.findFirst({
                 where: { email: customerInfo.email, storeId }
             });
@@ -59,13 +78,20 @@ export const handleChatMessage = async (req: Request, res: Response): Promise<vo
         }
 
         // 3. Find or Create Conversation
-        let conversation = await (prisma as any).conversation.findFirst({
-            where: {
-                storeId,
-                customerId: customer.id,
-                status: 'OPEN'
+        let conversation = existingConversation;
+
+        if (!conversation) {
+            conversation = await (prisma as any).conversation.findFirst({
+                where: {
+                    storeId,
+                    customerId: customer.id,
+                    status: 'OPEN'
+                }
+            });
+            if (conversation) {
+                console.log(`[CHAT LOG] Found existing OPEN conversation for customer: ${conversation.id}`);
             }
-        });
+        }
 
         if (!conversation) {
             conversation = await (prisma as any).conversation.create({
@@ -75,6 +101,9 @@ export const handleChatMessage = async (req: Request, res: Response): Promise<vo
                     status: 'OPEN'
                 }
             });
+            console.log(`[CHAT LOG] Created NEW conversation: ${conversation.id}`);
+        } else {
+            console.log(`[CHAT LOG] Using conversation: ${conversation.id}`);
         }
 
         // 4. Save Customer Message
@@ -85,6 +114,18 @@ export const handleChatMessage = async (req: Request, res: Response): Promise<vo
                 content: message
             }
         });
+
+        // CHECK: If AI is suspended (Manual Mode), stop here.
+        if (conversation.isAiSuspended) {
+            console.log(`[CHAT LOG] AI is suspended for conversation ${conversation.id}. Skip generation.`);
+            res.status(200).json({
+                role: 'AI',
+                content: null, // No content from AI
+                conversationId: conversation.id,
+                isAiSuspended: true
+            });
+            return;
+        }
 
         // 5. Fetch Knowledge
         const knowledges = await (prisma as any).knowledge.findMany({
@@ -115,49 +156,59 @@ LƯU Ý: Trả lời bằng Tiếng Việt. Chỉ nói về cửa hàng.
         let aiText = "";
 
         // 7. Call AI Provider
-        if (provider === 'openai') {
-            // OpenAI implementation
-            const messages = [
-                { role: 'system', content: systemPrompt },
-                ...(history?.map((h: any) => ({
-                    role: h.role === 'USER' ? 'user' : 'assistant',
-                    content: h.content,
-                })) || []),
-                { role: 'user', content: message }
-            ];
+        console.log(`[CHAT LOG] Calling AI Provider: ${provider}`);
 
-            const completion = await openai.chat.completions.create({
-                model: "gpt-4o-mini", // Use mini as a faster/cheaper default
-                messages: messages as any,
-            });
+        try {
+            if (provider === 'openai') {
+                // OpenAI implementation
+                const messages = [
+                    { role: 'system', content: systemPrompt },
+                    ...(history?.map((h: any) => ({
+                        role: h.role === 'USER' ? 'user' : 'assistant',
+                        content: h.content,
+                    })) || []),
+                    { role: 'user', content: message }
+                ];
 
-            aiText = completion.choices[0].message.content || "Xin lỗi, đã có lỗi xảy ra.";
-        } else {
-            // Gemini implementation (Default)
-            const model = genAI.getGenerativeModel({
-                model: "gemini-2.0-flash-lite",
-                systemInstruction: systemPrompt
-            });
+                console.log(`[CHAT LOG] Sending request to OpenAI...`);
+                const completion = await openai.chat.completions.create({
+                    model: "gpt-4o-mini", // Use mini as a faster/cheaper default
+                    messages: messages as any,
+                });
+                console.log(`[CHAT LOG] OpenAI Response received.`);
 
-            const chatHistory = history?.map((h: any) => ({
-                role: h.role === 'USER' ? 'user' : 'model',
-                parts: [{ text: h.content }],
-            })) || [];
+                aiText = completion.choices[0].message.content || "Xin lỗi, đã có lỗi xảy ra.";
+            } else {
+                // Gemini implementation (Default)
+                const model = genAI.getGenerativeModel({
+                    model: "gemini-2.0-flash-lite",
+                    systemInstruction: systemPrompt
+                });
 
-            // Gemini requires history to start with a 'user' message
-            // If the first message is from the model, we filter it out until we find a user message
-            let filteredHistory = chatHistory;
-            while (filteredHistory.length > 0 && filteredHistory[0].role !== 'user') {
-                filteredHistory.shift();
+                const chatHistory = history?.map((h: any) => ({
+                    role: h.role === 'USER' ? 'user' : 'model',
+                    parts: [{ text: h.content }],
+                })) || [];
+
+                // Gemini requires history to start with a 'user' message
+                let filteredHistory = chatHistory;
+                while (filteredHistory.length > 0 && filteredHistory[0].role !== 'user') {
+                    filteredHistory.shift();
+                }
+
+                console.log(`[CHAT LOG] Sending request to Gemini...`);
+                const chat = model.startChat({
+                    history: filteredHistory,
+                });
+
+                const result = await chat.sendMessage(message);
+                const response = await result.response;
+                console.log(`[CHAT LOG] Gemini Response received.`);
+                aiText = response.text();
             }
-
-            const chat = model.startChat({
-                history: filteredHistory,
-            });
-
-            const result = await chat.sendMessage(message);
-            const response = await result.response;
-            aiText = response.text();
+        } catch (aiError) {
+            console.error('[CHAT LOG] AI Provider Error:', aiError);
+            aiText = "Xin lỗi, hiện tại tôi đang gặp sự cố kết nối. Bạn vui lòng chờ giây lát rồi thử lại nhé!";
         }
 
         // 8. Save AI Message & Update Conversation
@@ -179,11 +230,28 @@ LƯU Ý: Trả lời bằng Tiếng Việt. Chỉ nói về cửa hàng.
 
         res.status(200).json({
             role: 'AI',
-            content: aiText
+            content: aiText,
+            conversationId: conversation.id
         });
 
     } catch (error) {
         console.error('Chat API Error:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+};
+
+export const getPublicMessages = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { conversationId } = req.params;
+
+        const messages = await (prisma as any).message.findMany({
+            where: { conversationId },
+            orderBy: { createdAt: 'asc' }
+        });
+
+        res.status(200).json(messages);
+    } catch (error) {
+        console.error('Get Public Messages error:', error);
         res.status(500).json({ message: 'Internal server error' });
     }
 };

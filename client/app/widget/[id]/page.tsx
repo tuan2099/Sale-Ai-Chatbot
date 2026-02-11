@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import { MessageSquare, Send, X, Bot, User, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,10 +21,40 @@ export default function WidgetPage() {
     const params = useParams();
     const [config, setConfig] = useState<StoreConfig | null>(null);
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<{ role: "AI" | "USER"; content: string }[]>([]);
+
+    // Use both state (for UI/Polling) and Ref (for handleSend and effects to avoid stale closures)
+    const [messages, _setMessages] = useState<{ role: "AI" | "USER" | "AGENT"; content: string }[]>([]);
+    const messagesRef = useRef<{ role: "AI" | "USER" | "AGENT"; content: string }[]>([]);
+
+    const setMessages = (newMessages: { role: "AI" | "USER" | "AGENT"; content: string }[] | ((prev: { role: "AI" | "USER" | "AGENT"; content: string }[]) => { role: "AI" | "USER" | "AGENT"; content: string }[])) => {
+        if (typeof newMessages === 'function') {
+            const result = newMessages(messagesRef.current);
+            _setMessages(result);
+            messagesRef.current = result;
+        } else {
+            _setMessages(newMessages);
+            messagesRef.current = newMessages;
+        }
+    };
+
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(true);
     const [randomizedSuggestions, setRandomizedSuggestions] = useState<string[]>([]);
+
+    // Conversation ID Tracking (State + Ref + Sync Helper)
+    const [conversationId, _setConversationId] = useState<string | null>(null);
+    const convIdRef = useRef<string | null>(null);
+
+    const setConversationId = (id: string | null) => {
+        console.log("[WIDGET] setConversationId called with:", id);
+        _setConversationId(id);
+        convIdRef.current = id;
+        if (id) {
+            localStorage.setItem(`conv_${params.id}`, id);
+        } else {
+            localStorage.removeItem(`conv_${params.id}`);
+        }
+    };
 
     useEffect(() => {
         // Dynamic Font Loading
@@ -40,6 +70,46 @@ export default function WidgetPage() {
         }
     }, [config?.widgetFont]);
 
+    // Polling for new messages from Server
+    useEffect(() => {
+        let interval: any;
+        // Depend ONLY on identity shifts (conv ID or window open state)
+        if (conversationId && isOpen) {
+            const fetchHistory = async () => {
+                try {
+                    const res = await fetch(`http://localhost:5000/api/chat/public/messages/${conversationId}`);
+                    if (res.ok) {
+                        const serverData = await res.json();
+
+                        const serverMessages = serverData.map((m: any) => ({
+                            role: m.role,
+                            content: m.content
+                        }));
+
+                        const welcomeMsg = config?.widgetWelcomeMsg || "Chào bạn! Tôi có thể giúp gì cho bạn?";
+                        const hasWelcomeOnServer = serverMessages.length > 0 && serverMessages[0].content === welcomeMsg;
+
+                        const mergedMessages = hasWelcomeOnServer
+                            ? serverMessages
+                            : [{ role: "AI", content: welcomeMsg }, ...serverMessages];
+
+                        // Only sync if the length or content is actually different from our latest REF
+                        if (JSON.stringify(mergedMessages) !== JSON.stringify(messagesRef.current)) {
+                            console.log("[WIDGET] Polling Sync: updating messages.");
+                            setMessages(mergedMessages);
+                        }
+                    }
+                } catch (error) {
+                    console.error("Poll error:", error);
+                }
+            };
+
+            fetchHistory();
+            interval = setInterval(fetchHistory, 3000);
+        }
+        return () => clearInterval(interval);
+    }, [conversationId, isOpen, config?.widgetWelcomeMsg]);
+
     useEffect(() => {
         const fetchConfig = async () => {
             try {
@@ -48,7 +118,6 @@ export default function WidgetPage() {
                     const data = await res.json();
                     setConfig(data);
 
-                    // Randomize suggestions once on load
                     if (data.widgetSuggestions) {
                         const allSuggestions = data.widgetSuggestions.split("\n")
                             .map((s: string) => s.trim())
@@ -56,8 +125,15 @@ export default function WidgetPage() {
                         setRandomizedSuggestions(allSuggestions.sort(() => Math.random() - 0.5).slice(0, 3));
                     }
 
-                    // Load from localStorage or set default
+                    // RESTORE: Pull from storage on mount
                     const savedMessages = localStorage.getItem(`chat_${params.id}`);
+                    const savedConvId = localStorage.getItem(`conv_${params.id}`);
+
+                    if (savedConvId) {
+                        console.log("[WIDGET] Found saved conversationId:", savedConvId);
+                        setConversationId(savedConvId);
+                    }
+
                     if (savedMessages) {
                         setMessages(JSON.parse(savedMessages));
                     } else {
@@ -75,8 +151,9 @@ export default function WidgetPage() {
     }, [params.id]);
 
     useEffect(() => {
-        if (messages.length > 0) {
-            localStorage.setItem(`chat_${params.id}`, JSON.stringify(messages));
+        // Persistence sync
+        if (messagesRef.current.length > 0) {
+            localStorage.setItem(`chat_${params.id}`, JSON.stringify(messagesRef.current));
         }
     }, [messages, params.id]);
 
@@ -86,29 +163,51 @@ export default function WidgetPage() {
         const textToSend = msgContent || input;
         if (!textToSend.trim()) return;
 
+        // CRITICAL: Pull latest ID from Ref or Storage to avoid closures
+        const currentId = convIdRef.current || localStorage.getItem(`conv_${params.id}`);
+        console.log("[WIDGET] handleSend starting. currentId:", currentId);
+
         setMessages(prev => [...prev, { role: "USER", content: textToSend }]);
         if (!msgContent) setInput("");
         setIsTyping(true);
 
         try {
+            console.log("[WIDGET] POST with conversationId:", currentId);
+
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
             const res = await fetch(`http://localhost:5000/api/chat/public/${params.id}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     message: textToSend,
-                    history: messages
-                })
+                    history: messagesRef.current.slice(0, -1), // Use the ref to get the history correctly sans current message
+                    conversationId: currentId
+                }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (res.ok) {
                 const data = await res.json();
+                console.log("[WIDGET] POST Success. Received ID:", data.conversationId);
+
                 setMessages(prev => [...prev, { role: "AI", content: data.content }]);
+                if (data.conversationId) {
+                    setConversationId(data.conversationId);
+                }
             } else {
-                setMessages(prev => [...prev, { role: "AI", content: "Xin lỗi, tôi đang gặp chút sự cố kết nối. Hãy thử lại sau nhé!" }]);
+                console.error("[WIDGET] POST Error:", res.status);
+                setMessages(prev => [...prev, { role: "AI", content: "Xin lỗi, đã có lỗi kết nối. Hãy thử lại sau nhé!" }]);
             }
-        } catch (error) {
-            console.error("Chat error:", error);
-            setMessages(prev => [...prev, { role: "AI", content: "Đã có lỗi xảy ra. Vui lòng kiểm tra kết nối." }]);
+        } catch (error: any) {
+            console.error("[WIDGET] Chat Error Exception:", error);
+            if (error.name === 'AbortError') {
+                setMessages(prev => [...prev, { role: "AI", content: "Phản hồi quá lâu, vui lòng thử lại sau." }]);
+            } else {
+                setMessages(prev => [...prev, { role: "AI", content: "Đã có lỗi xảy ra. Vui lòng kiểm tra kết nối." }]);
+            }
         } finally {
             setIsTyping(false);
         }
@@ -165,7 +264,9 @@ export default function WidgetPage() {
                                 onClick={() => {
                                     if (confirm("Xóa lịch sử chat?")) {
                                         setMessages([{ role: "AI", content: config.widgetWelcomeMsg || "Chào bạn! Tôi có thể giúp gì cho bạn?" }]);
+                                        setConversationId(null);
                                         localStorage.removeItem(`chat_${params.id}`);
+                                        localStorage.removeItem(`conv_${params.id}`);
                                     }
                                 }}
                                 className="hover:bg-white/10 p-1.5 rounded-full transition-colors"
@@ -190,11 +291,17 @@ export default function WidgetPage() {
                                     {m.role === "AI" ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
                                 </div>
                                 <div className={cn(
-                                    "p-3 rounded-2xl text-sm shadow-sm",
-                                    m.role === "AI" ? "bg-white text-gray-800 rounded-tl-none border border-gray-100" : "bg-blue-600 text-white rounded-tr-none"
+                                    "p-3 rounded-2xl text-sm shadow-sm relative group",
+                                    m.role === "USER" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
                                 )}
                                     style={m.role === "USER" ? { backgroundColor: config.widgetColor } : {}}
                                 >
+                                    {m.role === 'AGENT' && (
+                                        <div className="text-[9px] uppercase font-bold text-blue-500 mb-1 flex items-center gap-1">
+                                            <span className="w-1 h-1 bg-blue-500 rounded-full"></span>
+                                            Nhân viên hỗ trợ
+                                        </div>
+                                    )}
                                     {m.content}
                                 </div>
                             </div>
@@ -255,7 +362,7 @@ export default function WidgetPage() {
                             </button>
                         </div>
                         <p className="text-[10px] text-center text-gray-400 mt-2 flex items-center justify-center gap-1">
-                            Cung cấp bởi <span className="font-bold text-blue-600 opacity-70">Sale Chatbot AI</span>
+                            Cung cấp bởi <span className="font-bold text-blue-600 opacity-70">AI AGENT PLATFORM</span>
                         </p>
                     </div>
                 </div>

@@ -170,6 +170,8 @@ model Conversation {
   
   messages    Message[]
   tags        Tag[]
+
+  isAiSuspended Boolean @default(false)
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

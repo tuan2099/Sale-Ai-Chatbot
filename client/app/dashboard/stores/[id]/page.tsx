@@ -626,6 +626,33 @@ export default function StoreDetailsPage() {
         { id: "note", label: "Ghi chú thêm" },
     ];
 
+    const handleToggleAI = async () => {
+        if (!selectedConvId) return;
+        const conversation = conversations.find(c => c.id === selectedConvId);
+        if (!conversation) return;
+
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`http://localhost:5000/api/conversations/${selectedConvId}`, {
+                method: "PATCH",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ isAiSuspended: !conversation.isAiSuspended })
+            });
+
+            if (res.ok) {
+                const updatedConv = await res.json();
+                toast.success(updatedConv.isAiSuspended ? "Đã tắt AI (Chế độ thủ công)" : "Đã bật AI");
+                fetchConversations();
+            }
+        } catch (error) {
+            console.error("Toggle AI error:", error);
+            toast.error("Lỗi khi thay đổi trạng thái AI");
+        }
+    };
+
     return (
         <div className="space-y-6 pb-12">
             <div className="flex items-center gap-4">
@@ -684,7 +711,7 @@ export default function StoreDetailsPage() {
                         </Card>
 
                         <Card className="shadow-sm border-none bg-white p-2">
-                            <TabsList className="!h-auto flex flex-col bg-transparent gap-2 p-0 ">
+                            <TabsList className="!h-auto flex flex-col bg-transparent gap-2 p-0 w-full">
                                 <TabsTrigger value="analytics" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
                                     <BarChart3 className="h-4 w-4" /> Thống kê
                                 </TabsTrigger>
@@ -745,7 +772,7 @@ export default function StoreDetailsPage() {
                                 </TabsContent>
 
                                 <TabsContent value="chat" className="mt-0 h-[calc(100vh-280px)] min-h-[600px]">
-                                    <Card className="shadow-sm border-none bg-white h-full overflow-hidden flex">
+                                    <Card className="shadow-sm border-none bg-white h-full overflow-hidden flex !flex-row">
                                         <div className="w-80 h-full border-r">
                                             <ConversationList
                                                 conversations={conversations}
@@ -764,6 +791,8 @@ export default function StoreDetailsPage() {
                                                             messages={messages}
                                                             customerName={conversations.find(c => c.id === selectedConvId)?.customer.name || "Customer"}
                                                             onSendMessage={handleSendMessage}
+                                                            isAiSuspended={conversations.find(c => c.id === selectedConvId)?.isAiSuspended}
+                                                            onToggleAI={handleToggleAI}
                                                         />
                                                     </div>
                                                     <CRMAside

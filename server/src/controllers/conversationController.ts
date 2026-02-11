@@ -129,7 +129,7 @@ export const sendAgentMessage = async (req: Request, res: Response): Promise<voi
 export const updateConversation = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        const { status, tagIds } = req.body;
+        const { status, tagIds, isAiSuspended } = req.body;
         const userId = (req as any).user?.userId;
 
         const conversation = await (prisma as any).conversation.findUnique({
@@ -144,6 +144,7 @@ export const updateConversation = async (req: Request, res: Response): Promise<v
 
         const data: any = {};
         if (status) data.status = status;
+        if (typeof isAiSuspended === 'boolean') data.isAiSuspended = isAiSuspended;
         if (tagIds) {
             data.tags = {
                 set: tagIds.map((tid: string) => ({ id: tid }))

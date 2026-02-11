@@ -23,6 +23,8 @@ interface ChatWindowProps {
     customerName: string;
     onSendMessage: (content: string) => void;
     isLoading?: boolean;
+    isAiSuspended?: boolean;
+    onToggleAI?: () => void;
 }
 
 export function ChatWindow({
@@ -30,7 +32,9 @@ export function ChatWindow({
     messages,
     customerName,
     onSendMessage,
-    isLoading
+    isLoading,
+    isAiSuspended,
+    onToggleAI
 }: ChatWindowProps) {
     const [input, setInput] = useState("");
     const [correctingMessageId, setCorrectingMessageId] = useState<string | null>(null);
@@ -110,13 +114,29 @@ export function ChatWindow({
                     <div>
                         <h2 className="font-semibold text-sm">{customerName}</h2>
                         <div className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-green-500" />
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Đang trực tuyến</span>
+                            {isAiSuspended ? (
+                                <>
+                                    <span className="w-2 h-2 rounded-full bg-orange-500" />
+                                    <span className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">Chế độ thủ công</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="w-2 h-2 rounded-full bg-green-500" />
+                                    <span className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">AI Đang trả lời</span>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="h-8 text-xs">Chuyển cho AI</Button>
+                    <Button
+                        variant={isAiSuspended ? "default" : "outline"}
+                        size="sm"
+                        className={cn("h-8 text-xs", isAiSuspended ? "bg-blue-600 hover:bg-blue-700" : "")}
+                        onClick={onToggleAI}
+                    >
+                        {isAiSuspended ? "Chuyển giao cho AI" : "Can thiệp (Tắt AI)"}
+                    </Button>
                     <Button variant="outline" size="sm" className="h-8 text-xs text-red-600 border-red-200 bg-red-50 hover:bg-red-100">Kết thúc</Button>
                 </div>
             </div>
