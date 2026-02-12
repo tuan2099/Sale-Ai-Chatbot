@@ -191,6 +191,12 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
                 widgetSuggestions: data.widgetSuggestions !== undefined ? String(data.widgetSuggestions) : undefined,
                 widgetWelcomeSuggestions: data.widgetWelcomeSuggestions !== undefined ? String(data.widgetWelcomeSuggestions) : undefined,
                 widgetLeadFields: data.widgetLeadFields !== undefined ? String(data.widgetLeadFields) : undefined,
+
+                // Omni-channel Config
+                fbPageId: data.fbPageId !== undefined ? String(data.fbPageId) : undefined,
+                fbAccessToken: data.fbAccessToken !== undefined ? String(data.fbAccessToken) : undefined,
+                zaloOaId: data.zaloOaId !== undefined ? String(data.zaloOaId) : undefined,
+                zaloAccessToken: data.zaloAccessToken !== undefined ? String(data.zaloAccessToken) : undefined,
             }
         });
 

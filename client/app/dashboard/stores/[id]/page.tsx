@@ -21,7 +21,11 @@ import {
     FileUp,
     Trash2,
     BarChart3,
-    LayoutDashboard
+    LayoutDashboard,
+    Megaphone,
+    Share2,
+    Copy,
+    Check
 } from "lucide-react";
 import { AnalyticsTab } from "@/components/store/AnalyticsTab";
 import { useForm } from "react-hook-form";
@@ -136,6 +140,185 @@ export default function StoreDetailsPage() {
     const [fileName, setFileName] = useState("");
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [isSavingFile, setIsSavingFile] = useState(false);
+
+    // Script Logic
+    const [scripts, setScripts] = useState<any[]>([]);
+    const [showScriptModal, setShowScriptModal] = useState(false);
+    const [scriptKeyword, setScriptKeyword] = useState("");
+    const [scriptResponse, setScriptResponse] = useState("");
+    const [isSavingScript, setIsSavingScript] = useState(false);
+    const [editScriptId, setEditScriptId] = useState<string | null>(null);
+
+    // Broadcast Logic
+    const [broadcasts, setBroadcasts] = useState<any[]>([]);
+    const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+    const [broadcastName, setBroadcastName] = useState("");
+    const [broadcastContent, setBroadcastContent] = useState("");
+    const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+
+    // Integration Logic
+    const [fbPageId, setFbPageId] = useState("");
+    const [fbAccessToken, setFbAccessToken] = useState("");
+    const [zaloOaId, setZaloOaId] = useState("");
+    const [zaloAccessToken, setZaloAccessToken] = useState("");
+    const [isSavingIntegration, setIsSavingIntegration] = useState(false);
+
+    const fetchBroadcasts = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`http://localhost:5000/api/broadcasts/${params.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setBroadcasts(await res.json());
+            }
+        } catch (error) {
+            console.error("Fetch broadcasts error:", error);
+        }
+    };
+
+    const handleSendBroadcast = async () => {
+        if (!broadcastName || !broadcastContent) {
+            toast.error("Vui lòng nhập tên và nội dung");
+            return;
+        }
+
+        if (!confirm("Bạn có chắc chắn muốn gửi tin nhắn này đến TẤT CẢ khách hàng?")) return;
+
+        setIsSendingBroadcast(true);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`http://localhost:5000/api/broadcasts/${params.id}`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ name: broadcastName, content: broadcastContent })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(`Đã gửi thành công cho ${data.recipientCount} khách hàng!`);
+                setShowBroadcastModal(false);
+                setBroadcastName("");
+                setBroadcastContent("");
+                fetchBroadcasts();
+            } else {
+                const err = await res.json();
+                toast.error(err.message || "Gửi thất bại");
+            }
+        } catch (error) {
+            console.error("Broadcast error:", error);
+            toast.error("Có lỗi xảy ra");
+        } finally {
+            setIsSendingBroadcast(false);
+        }
+    };
+
+    const handleSaveIntegration = async () => {
+        setIsSavingIntegration(true);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`http://localhost:5000/api/stores/${params.id}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    fbPageId,
+                    fbAccessToken,
+                    zaloOaId,
+                    zaloAccessToken
+                })
+            });
+
+            if (res.ok) {
+                toast.success("Đã lưu cấu hình kết nối!");
+            } else {
+                toast.error("Lưu thất bại");
+            }
+        } catch (error) {
+            console.error("Save integration error:", error);
+            toast.error("Có lỗi xảy ra");
+        } finally {
+            setIsSavingIntegration(false);
+        }
+    };
+
+
+    const fetchScripts = async () => {
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`http://localhost:5000/api/scripts/${params.id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setScripts(await res.json());
+            }
+        } catch (error) {
+            console.error("Fetch scripts error:", error);
+        }
+    };
+
+    const handleSaveScript = async () => {
+        if (!scriptKeyword || !scriptResponse) {
+            toast.error("Vui lòng nhập đầy đủ thông tin");
+            return;
+        }
+
+        setIsSavingScript(true);
+        try {
+            const token = localStorage.getItem("token");
+            const method = editScriptId ? "PUT" : "POST";
+            const url = editScriptId
+                ? `http://localhost:5000/api/scripts/${editScriptId}`
+                : `http://localhost:5000/api/scripts/${params.id}`;
+
+            const res = await fetch(url, {
+                method,
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`
+                },
+                body: JSON.stringify({ keyword: scriptKeyword, response: scriptResponse })
+            });
+
+            if (res.ok) {
+                toast.success(editScriptId ? "Đã cập nhật kịch bản" : "Đã tạo kịch bản mới");
+                setShowScriptModal(false);
+                setScriptKeyword("");
+                setScriptResponse("");
+                setEditScriptId(null);
+                fetchScripts();
+            } else {
+                toast.error("Lưu thất bại");
+            }
+        } catch (error) {
+            console.error("Save script error:", error);
+            toast.error("Có lỗi xảy ra");
+        } finally {
+            setIsSavingScript(false);
+        }
+    };
+
+    const handleDeleteScript = async (id: string) => {
+        if (!confirm("Xóa kịch bản này?")) return;
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`http://localhost:5000/api/scripts/${id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                toast.success("Đã xóa kịch bản");
+                fetchScripts();
+            }
+        } catch (error) {
+            toast.error("Xóa thất bại");
+        }
+    };
 
     const form = useForm<AIConfigValues>({
         resolver: zodResolver(AIConfigSchema),
@@ -506,6 +689,8 @@ export default function StoreDetailsPage() {
             fetchStore();
             fetchKnowledge();
             fetchConversations();
+            fetchScripts();
+            fetchBroadcasts();
         }
     }, [params.id]);
 
@@ -735,6 +920,15 @@ export default function StoreDetailsPage() {
                                 </TabsTrigger>
                                 <TabsTrigger value="team" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
                                     <Users className="h-4 w-4" /> Đội ngũ
+                                </TabsTrigger>
+                                <TabsTrigger value="scripts" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
+                                    <FileUp className="h-4 w-4" /> Kịch bản & Từ khóa
+                                </TabsTrigger>
+                                <TabsTrigger value="broadcasts" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
+                                    <Megaphone className="h-4 w-4" /> Chiến dịch gửi tin
+                                </TabsTrigger>
+                                <TabsTrigger value="integration" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
+                                    <Share2 className="h-4 w-4" /> Kết nối đa kênh
                                 </TabsTrigger>
                             </TabsList>
                         </Card>
@@ -1298,11 +1492,317 @@ export default function StoreDetailsPage() {
                                         </CardContent>
                                     </Card>
                                 </TabsContent>
+                                <TabsContent value="scripts" className="mt-0">
+                                    <Card className="shadow-sm border-none bg-white">
+                                        <CardHeader className="flex flex-row items-center justify-between">
+                                            <div>
+                                                <CardTitle>Kịch bản trả lời tự động</CardTitle>
+                                                <CardDescription>
+                                                    Tạo các câu trả lời sẵn cho các từ khóa cụ thể.
+                                                </CardDescription>
+                                            </div>
+                                            <Button type="button" onClick={() => setShowScriptModal(true)} className="gap-2">
+                                                <Plus className="h-4 w-4" /> Thêm kịch bản
+                                            </Button>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-4">
+                                                {scripts.length === 0 ? (
+                                                    <div className="text-center py-10 text-gray-500 border-2 border-dashed rounded-xl">
+                                                        <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                        <p>Chưa có kịch bản nào.</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid gap-4">
+                                                        {scripts.map((script: any) => (
+                                                            <div key={script.id} className="group flex items-start justify-between p-4 border rounded-xl hover:bg-gray-50 transition-colors">
+                                                                <div className="space-y-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-100">
+                                                                            {script.keyword}
+                                                                        </Badge>
+                                                                        <span className="text-xs text-gray-400">
+                                                                            {new Date(script.createdAt).toLocaleDateString('vi-VN')}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{script.response}</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                                        onClick={() => {
+                                                                            setEditScriptId(script.id);
+                                                                            setScriptKeyword(script.keyword);
+                                                                            setScriptResponse(script.response);
+                                                                            setShowScriptModal(true);
+                                                                        }}
+                                                                    >
+                                                                        <Settings className="h-4 w-4" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
+                                                                        onClick={() => handleDeleteScript(script.id)}
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </TabsContent>
+
+                                <TabsContent value="broadcasts" className="mt-0">
+                                    <Card className="shadow-sm border-none bg-white">
+                                        <CardHeader className="flex flex-row items-center justify-between">
+                                            <div>
+                                                <CardTitle>Chiến dịch gửi tin (Broadcast)</CardTitle>
+                                                <CardDescription>
+                                                    Gửi tin nhắn hàng loạt đến tất cả khách hàng đã từng tương tác.
+                                                </CardDescription>
+                                            </div>
+                                            <Button type="button" onClick={() => setShowBroadcastModal(true)} className="gap-2 bg-purple-600 hover:bg-purple-700">
+                                                <Megaphone className="h-4 w-4" /> Tạo chiến dịch mới
+                                            </Button>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-4">
+                                                {broadcasts.length === 0 ? (
+                                                    <div className="text-center py-10 text-gray-500 border-2 border-dashed rounded-xl">
+                                                        <Megaphone className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                                                        <p>Chưa có chiến dịch nào.</p>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid gap-4">
+                                                        {broadcasts.map((b: any) => (
+                                                            <div key={b.id} className="p-4 border rounded-xl hover:bg-gray-50 transition-colors">
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <div>
+                                                                        <h4 className="font-bold text-gray-800">{b.name}</h4>
+                                                                        <p className="text-xs text-gray-500">
+                                                                            Gửi lúc: {new Date(b.sentAt).toLocaleString('vi-VN')}
+                                                                        </p>
+                                                                    </div>
+                                                                    <Badge variant="secondary" className="bg-green-100 text-green-700">
+                                                                        Đã gửi: {b.recipientCount} người
+                                                                    </Badge>
+                                                                </div>
+                                                                <div className="bg-gray-100 p-3 rounded-lg text-sm text-gray-700 whitespace-pre-wrap">
+                                                                    {b.content}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </TabsContent>
+
+                                <TabsContent value="integration" className="mt-0">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <Card className="shadow-sm border-none bg-white">
+                                            <CardHeader>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <span className="bg-blue-100 p-2 rounded-lg text-blue-600">
+                                                        <Globe className="h-5 w-5" />
+                                                    </span>
+                                                    Facebook Fanpage
+                                                </CardTitle>
+                                                <CardDescription>
+                                                    Kết nối Chatbot với Fanpage để tự động trả lời inbox.
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">Page ID</label>
+                                                    <Input
+                                                        placeholder="Nhập Fanpage ID..."
+                                                        value={fbPageId}
+                                                        onChange={(e) => setFbPageId(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">Page Access Token</label>
+                                                    <Input
+                                                        type="password"
+                                                        placeholder="Nhập Access Token..."
+                                                        value={fbAccessToken}
+                                                        onChange={(e) => setFbAccessToken(e.target.value)}
+                                                    />
+                                                    <p className="text-xs text-gray-500">
+                                                        Lấy Token (dài hạn) từ Facebook Developer Portal.
+                                                    </p>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+
+                                        <Card className="shadow-sm border-none bg-white">
+                                            <CardHeader>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <span className="bg-blue-100 p-2 rounded-lg text-blue-600">
+                                                        <MessageSquare className="h-5 w-5" />
+                                                    </span>
+                                                    Zalo Official Account
+                                                </CardTitle>
+                                                <CardDescription>
+                                                    Kết nối Chatbot với Zalo OA (yêu cầu gói OA trả phí để dùng API).
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent className="space-y-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">OA ID</label>
+                                                    <Input
+                                                        placeholder="Nhập Zalo OA ID..."
+                                                        value={zaloOaId}
+                                                        onChange={(e) => setZaloOaId(e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-sm font-medium">OA Access Token</label>
+                                                    <Input
+                                                        type="password"
+                                                        placeholder="Nhập Access Token..."
+                                                        value={zaloAccessToken}
+                                                        onChange={(e) => setZaloAccessToken(e.target.value)}
+                                                    />
+                                                    <p className="text-xs text-gray-500">
+                                                        Token Zalo thường hết hạn sau 24h (trừ khi dùng Refresh Token).
+                                                    </p>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+
+                                        <Card className="col-span-1 md:col-span-2 shadow-sm border-none bg-blue-50">
+                                            <CardContent className="p-6">
+                                                <h3 className="font-semibold text-blue-800 mb-2">Webhook URL (Dùng chung cho Facebook & Zalo)</h3>
+                                                <div className="flex items-center gap-2 bg-white p-3 rounded-lg border border-blue-200">
+                                                    <code className="flex-1 text-sm text-gray-600 font-mono overflow-hidden text-ellipsis whitespace-nowrap">
+                                                        Tự thay đổi domain khi dùng ngrok/deploy
+                                                        <br />
+                                                        https://YOUR_DOMAIN/api/webhook/facebook
+                                                    </code>
+                                                    <Button variant="outline" size="sm" onClick={() => {
+                                                        navigator.clipboard.writeText("https://YOUR_DOMAIN/api/webhook/facebook");
+                                                        toast.success("Đã sao chép URL");
+                                                    }}>
+                                                        <Copy className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                                <p className="text-xs text-blue-600 mt-2">
+                                                    <strong>Verify Token:</strong> <code>sale_ai_verify</code>
+                                                </p>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+
+                                    <div className="mt-6 flex justify-end">
+                                        <Button
+                                            type="button"
+                                            onClick={handleSaveIntegration}
+                                            disabled={isSavingIntegration}
+                                            className="bg-blue-600 hover:bg-blue-700"
+                                        >
+                                            {isSavingIntegration ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                            Lưu cấu hình kết nối
+                                        </Button>
+                                    </div>
+                                </TabsContent>
                             </form>
                         </Form>
                     </div>
                 </div>
             </Tabs>
+
+            {/* Modal Broadcast */}
+            <Dialog open={showBroadcastModal} onOpenChange={setShowBroadcastModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Tạo chiến dịch mới</DialogTitle>
+                        <DialogDescription>
+                            Tin nhắn sẽ được gửi đến TẤT CẢ khách hàng đang hoạt động của cửa hàng.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Tên chiến dịch (Nội bộ)</label>
+                            <Input
+                                placeholder="Ví dụ: Khuyến mãi tết 2025"
+                                value={broadcastName}
+                                onChange={(e) => setBroadcastName(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Nội dung tin nhắn gửi khách</label>
+                            <Textarea
+                                placeholder="Nhập nội dung tin nhắn..."
+                                value={broadcastContent}
+                                onChange={(e) => setBroadcastContent(e.target.value)}
+                                rows={5}
+                            />
+                            <p className="text-xs text-red-500 font-medium">
+                                Lưu ý: Gửi tin nhắn hàng loạt có thể làm phiền khách hàng. Hãy cân nhắc kỹ.
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowBroadcastModal(false)}>Hủy</Button>
+                        <Button onClick={handleSendBroadcast} disabled={isSendingBroadcast} className="bg-purple-600 hover:bg-purple-700">
+                            {isSendingBroadcast ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Megaphone className="mr-2 h-4 w-4" />}
+                            Gửi ngay
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={showScriptModal} onOpenChange={setShowScriptModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>{editScriptId ? "Chỉnh sửa kịch bản" : "Thêm kịch bản mới"}</DialogTitle>
+                        <DialogDescription>
+                            Khi khách nhắn tin chứa từ khóa này, Chatbot sẽ trả lời ngay lập tức bằng nội dung bên dưới.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Từ khóa (Keyword)</label>
+                            <Input
+                                placeholder="Ví dụ: bảng giá, khuyến mãi, liên hệ..."
+                                value={scriptKeyword}
+                                onChange={(e) => setScriptKeyword(e.target.value)}
+                            />
+                            <p className="text-xs text-gray-500">
+                                Không phân biệt hoa thường. Ví dụ nhập "giá" sẽ bắt được cả "Giá bao nhiêu", "xin bảng giá".
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Câu trả lời tự động</label>
+                            <Textarea
+                                placeholder="Nhập nội dung trả lời..."
+                                value={scriptResponse}
+                                onChange={(e) => setScriptResponse(e.target.value)}
+                                rows={5}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowScriptModal(false)}>Hủy</Button>
+                        <Button onClick={handleSaveScript} disabled={isSavingScript}>
+                            {isSavingScript ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                            {editScriptId ? "Cập nhật" : "Tạo mới"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Modal Manual Knowledge */}
             <Dialog open={showManualModal} onOpenChange={setShowManualModal}>

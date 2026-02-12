@@ -27,6 +27,10 @@ app.use(helmet());
 app.use(morgan('dev'));
 app.use(passport.initialize());
 
+import scriptRoutes from './routes/scriptRoutes';
+import broadcastRoutes from './routes/broadcastRoutes';
+import webhookRoutes from './routes/webhookRoutes';
+
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/customers', customerRoutes);
@@ -36,6 +40,9 @@ app.use('/api/knowledge', knowledgeRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/team', teamRoutes);
+app.use('/api/scripts', scriptRoutes);
+app.use('/api/broadcasts', broadcastRoutes);
+app.use('/api/webhook', webhookRoutes);
 
 app.get('/', (req, res) => {
     res.send('Sale AI Backend is running!');

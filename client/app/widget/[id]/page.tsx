@@ -221,6 +221,64 @@ export default function WidgetPage() {
         }
     }, [isOpen]);
 
+    // Lead Form State
+    const [showLeadForm, setShowLeadForm] = useState(false);
+    const [leadFormData, setLeadFormData] = useState({ name: "", email: "", phoneNumber: "", address: "", note: "" });
+    const [isSubmittingLead, setIsSubmittingLead] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen || !config) return;
+
+        // Check if lead form is required and not yet submitted
+        const leadFields = config.widgetLeadFields ? config.widgetLeadFields.split(",").filter(f => f) : [];
+        const hasSubmittedLead = localStorage.getItem(`lead_submitted_${params.id}`);
+        const hasConversation = localStorage.getItem(`conv_${params.id}`);
+
+        // Only show if fields are configured AND (not submitted OR no conversation yet)
+        if (leadFields.length > 0 && !hasSubmittedLead && !hasConversation) {
+            setShowLeadForm(true);
+        }
+    }, [isOpen, config, params.id]);
+
+    const handleSubmitLead = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmittingLead(true);
+
+        try {
+            const res = await fetch(`http://localhost:5000/api/chat/public/lead/${params.id}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(leadFormData)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                console.log("Lead submitted:", data);
+
+                localStorage.setItem(`lead_submitted_${params.id}`, "true");
+
+                if (data.customerId) {
+                    // Start conversation immediately
+                    if (data.conversationId) {
+                        setConversationId(data.conversationId);
+                    }
+                    setShowLeadForm(false);
+
+                    // Optionally send a welcome message from user side to trigger flow?
+                    // Or just let them start chatting. 
+                    // Let's add a system message locally saying "Info received"
+                    setMessages(prev => [...prev, { role: "AI", content: "Cảm ơn bạn! Tôi đã nhận được thông tin. Tôi có thể giúp gì cho bạn?" }]);
+                }
+            } else {
+                console.error("Lead submit failed"); // Handle error UI if needed
+            }
+        } catch (error) {
+            console.error("Lead submit error", error);
+        } finally {
+            setIsSubmittingLead(false);
+        }
+    };
+
     if (loading) return null;
     if (!config) return <div className="text-gray-400 p-4 text-xs">Widget not available</div>;
 
@@ -229,6 +287,8 @@ export default function WidgetPage() {
             .map(s => s.trim())
             .filter(s => s.length > 0)
         : [];
+
+    const leadFields = config.widgetLeadFields ? config.widgetLeadFields.split(",") : [];
 
     return (
         <div
@@ -267,6 +327,8 @@ export default function WidgetPage() {
                                         setConversationId(null);
                                         localStorage.removeItem(`chat_${params.id}`);
                                         localStorage.removeItem(`conv_${params.id}`);
+                                        localStorage.removeItem(`lead_submitted_${params.id}`); // Reset lead submission too
+                                        setShowLeadForm(true); // Re-show form if configured
                                     }
                                 }}
                                 className="hover:bg-white/10 p-1.5 rounded-full transition-colors"
@@ -280,91 +342,169 @@ export default function WidgetPage() {
                         </div>
                     </div>
 
-                    {/* Body */}
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
-                        {messages.map((m, i) => (
-                            <div key={i} className={cn("flex gap-2 max-w-[85%]", m.role === "USER" ? "ml-auto flex-row-reverse" : "")}>
-                                <div className={cn(
-                                    "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm",
-                                    m.role === "AI" ? "bg-white text-blue-600" : "bg-blue-600 text-white"
-                                )}>
-                                    {m.role === "AI" ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
-                                </div>
-                                <div className={cn(
-                                    "p-3 rounded-2xl text-sm shadow-sm relative group",
-                                    m.role === "USER" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
-                                )}
-                                    style={m.role === "USER" ? { backgroundColor: config.widgetColor } : {}}
-                                >
-                                    {m.role === 'AGENT' && (
-                                        <div className="text-[9px] uppercase font-bold text-blue-500 mb-1 flex items-center gap-1">
-                                            <span className="w-1 h-1 bg-blue-500 rounded-full"></span>
-                                            Nhân viên hỗ trợ
-                                        </div>
-                                    )}
-                                    {m.content}
-                                </div>
-                            </div>
-                        ))}
+                    {/* BODY CONTENT - CONDITIONAL RENDER */}
+                    {showLeadForm ? (
+                        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 flex flex-col justify-center">
+                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                <h3 className="text-lg font-bold text-gray-800 mb-2 truncate">Xin chào! 👋</h3>
+                                <p className="text-xs text-gray-500 mb-4">Vui lòng để lại thông tin để chúng tôi hỗ trợ tốt nhất nhé.</p>
 
-                        {messages.length === 1 && messages[0].role === "AI" && randomizedSuggestions.length > 0 && (
-                            <div className="flex flex-wrap gap-2 ml-10">
-                                {randomizedSuggestions.map((s, i) => (
+                                <form onSubmit={handleSubmitLead} className="space-y-3">
+                                    {leadFields.includes("name") && (
+                                        <input
+                                            required
+                                            type="text"
+                                            placeholder="Tên của bạn *"
+                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            value={leadFormData.name}
+                                            onChange={e => setLeadFormData({ ...leadFormData, name: e.target.value })}
+                                        />
+                                    )}
+                                    {leadFields.includes("phoneNumber") && (
+                                        <input
+                                            required
+                                            type="tel"
+                                            placeholder="Số điện thoại *"
+                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            value={leadFormData.phoneNumber}
+                                            onChange={e => setLeadFormData({ ...leadFormData, phoneNumber: e.target.value })}
+                                        />
+                                    )}
+                                    {leadFields.includes("email") && (
+                                        <input
+                                            type="email"
+                                            placeholder="Email"
+                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            value={leadFormData.email}
+                                            onChange={e => setLeadFormData({ ...leadFormData, email: e.target.value })}
+                                        />
+                                    )}
+                                    {leadFields.includes("address") && (
+                                        <input
+                                            type="text"
+                                            placeholder="Địa chỉ"
+                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            value={leadFormData.address}
+                                            onChange={e => setLeadFormData({ ...leadFormData, address: e.target.value })}
+                                        />
+                                    )}
+                                    {leadFields.includes("note") && (
+                                        <textarea
+                                            placeholder="Ghi chú thêm..."
+                                            className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none h-20"
+                                            value={leadFormData.note}
+                                            onChange={e => setLeadFormData({ ...leadFormData, note: e.target.value })}
+                                        />
+                                    )}
+
                                     <button
-                                        key={i}
-                                        onClick={() => handleSend(s)}
-                                        className="text-[11px] px-3 py-1.5 bg-white border border-blue-100 text-blue-600 rounded-full hover:bg-blue-50 transition-colors shadow-sm text-left"
+                                        type="submit"
+                                        disabled={isSubmittingLead}
+                                        className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors disabled:opacity-70 mt-2"
+                                        style={{ backgroundColor: config.widgetColor }}
                                     >
-                                        {s}
+                                        {isSubmittingLead ? "Đang gửi..." : "Bắt đầu Chat"}
                                     </button>
-                                ))}
-                            </div>
-                        )}
 
-                        {isTyping && (
-                            <div className="flex gap-2 mb-4 justify-start">
-                                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 overflow-hidden shadow-sm animate-pulse">
-                                    {config.widgetImage ? (
-                                        <img src={config.widgetImage} alt="AI" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <Bot className="w-5 h-5 text-white" />
-                                    )}
-                                </div>
-                                <div className="p-3 rounded-lg bg-gray-100 text-gray-500 text-xs italic flex items-center gap-2">
-                                    <span className="flex gap-1">
-                                        <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></span>
-                                        <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                                        <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
-                                    </span>
-                                    {config.aiName || "Assistant"} đang trả lời...
-                                </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowLeadForm(false)}
+                                        className="w-full py-2 text-gray-400 text-xs hover:text-gray-600"
+                                    >
+                                        Bỏ qua và chat ngay
+                                    </button>
+                                </form>
                             </div>
-                        )}
-                    </div>
-
-                    {/* Footer */}
-                    <div className="p-3 bg-white border-t">
-                        <div className="relative flex items-center">
-                            <input
-                                type="text"
-                                placeholder="Nhập tin nhắn..."
-                                className="w-full px-4 py-2 bg-gray-100 rounded-full text-sm outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 transition-all border-none"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                            />
-                            <button
-                                onClick={() => handleSend()}
-                                className="absolute right-1 p-2 rounded-full text-white bg-blue-600 hover:opacity-90 transition-opacity"
-                                style={{ backgroundColor: config.widgetColor }}
-                            >
-                                <Send className="w-4 h-4" />
-                            </button>
                         </div>
-                        <p className="text-[10px] text-center text-gray-400 mt-2 flex items-center justify-center gap-1">
-                            Cung cấp bởi <span className="font-bold text-blue-600 opacity-70">AI AGENT PLATFORM</span>
-                        </p>
-                    </div>
+                    ) : (
+                        /* Normal Chat Body */
+                        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50">
+                            {messages.map((m, i) => (
+                                <div key={i} className={cn("flex gap-2 max-w-[85%]", m.role === "USER" ? "ml-auto flex-row-reverse" : "")}>
+                                    <div className={cn(
+                                        "w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm",
+                                        m.role === "AI" ? "bg-white text-blue-600" : "bg-blue-600 text-white"
+                                    )}>
+                                        {m.role === "AI" ? <Bot className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                                    </div>
+                                    <div className={cn(
+                                        "p-3 rounded-2xl text-sm shadow-sm relative group",
+                                        m.role === "USER" ? "bg-blue-600 text-white rounded-tr-none" : "bg-white text-gray-800 rounded-tl-none border border-gray-100"
+                                    )}
+                                        style={m.role === "USER" ? { backgroundColor: config.widgetColor } : {}}
+                                    >
+                                        {m.role === 'AGENT' && (
+                                            <div className="text-[9px] uppercase font-bold text-blue-500 mb-1 flex items-center gap-1">
+                                                <span className="w-1 h-1 bg-blue-500 rounded-full"></span>
+                                                Nhân viên hỗ trợ
+                                            </div>
+                                        )}
+                                        {m.content}
+                                    </div>
+                                </div>
+                            ))}
+
+                            {messages.length === 1 && messages[0].role === "AI" && randomizedSuggestions.length > 0 && (
+                                <div className="flex flex-wrap gap-2 ml-10">
+                                    {randomizedSuggestions.map((s, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => handleSend(s)}
+                                            className="text-[11px] px-3 py-1.5 bg-white border-blue-100 text-blue-600 rounded-full hover:bg-blue-50 transition-colors shadow-sm text-left border"
+                                        >
+                                            {s}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {isTyping && (
+                                <div className="flex gap-2 mb-4 justify-start">
+                                    <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center shrink-0 overflow-hidden shadow-sm animate-pulse">
+                                        {config.widgetImage ? (
+                                            <img src={config.widgetImage} alt="AI" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <Bot className="w-5 h-5 text-white" />
+                                        )}
+                                    </div>
+                                    <div className="p-3 rounded-lg bg-gray-100 text-gray-500 text-xs italic flex items-center gap-2">
+                                        <span className="flex gap-1">
+                                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></span>
+                                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                                            <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                                        </span>
+                                        {config.aiName || "Assistant"} đang trả lời...
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Footer - Hide input when showing lead form */}
+                    {!showLeadForm && (
+                        <div className="p-3 bg-white border-t">
+                            <div className="relative flex items-center">
+                                <input
+                                    type="text"
+                                    placeholder="Nhập tin nhắn..."
+                                    className="w-full px-4 py-2 bg-gray-100 rounded-full text-sm outline-none focus:bg-white focus:ring-1 focus:ring-blue-500 transition-all border-none"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value)}
+                                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                                />
+                                <button
+                                    onClick={() => handleSend()}
+                                    className="absolute right-1 p-2 rounded-full text-white bg-blue-600 hover:opacity-90 transition-opacity"
+                                    style={{ backgroundColor: config.widgetColor }}
+                                >
+                                    <Send className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-center text-gray-400 mt-2 flex items-center justify-center gap-1">
+                                Cung cấp bởi <span className="font-bold text-blue-600 opacity-70">AI AGENT PLATFORM</span>
+                            </p>
+                        </div>
+                    )}
                 </div>
             )}
 
