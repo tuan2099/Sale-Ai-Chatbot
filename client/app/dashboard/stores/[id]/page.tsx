@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import {
     Loader2,
@@ -105,15 +105,24 @@ interface Knowledge {
 
 export default function StoreDetailsPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
     const router = useRouter();
-    const [activeTab, setActiveTab] = useState("ai");
+    // Default to 'analytics' if no tab param
+    const currentTab = searchParams.get("tab") || "analytics";
+
+    const onTabChange = (value: string) => {
+        // Update URL without reloading
+        const newParams = new URLSearchParams(searchParams.toString());
+        newParams.set("tab", value);
+        router.push(`/dashboard/stores/${params.id}?${newParams.toString()}`);
+    };
+
     const [store, setStore] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [knowledges, setKnowledges] = useState<Knowledge[]>([]);
     const [loadingKnowledge, setLoadingKnowledge] = useState(false);
 
-    // Live Chat & CRM State
     const [conversations, setConversations] = useState<any[]>([]);
     const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
     const [messages, setMessages] = useState<any[]>([]);
@@ -853,89 +862,10 @@ export default function StoreDetailsPage() {
                 </div>
             </div>
 
-            <Tabs defaultValue="analytics" className="w-full">
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {/* Info Card & Navigation - Sticky on desktop */}
-                    <div className="lg:col-span-1 space-y-6">
-                        <Card className="shadow-sm border-none bg-white">
-                            <CardHeader>
-                                <CardTitle className="text-lg flex items-center gap-2">
-                                    <Info className="h-5 w-5 text-blue-600" /> Thông tin tổng quan
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="h-12 w-12 rounded-lg bg-gray-100 flex items-center justify-center">
-                                        <Store className="h-6 w-6 text-gray-500" />
-                                    </div>
-                                    <div className="overflow-hidden">
-                                        <p className="text-sm font-medium">Tên cửa hàng</p>
-                                        <p className="text-lg font-bold truncate">{store.name}</p>
-                                    </div>
-                                </div>
-
-                                <Separator />
-
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <div className="flex items-center gap-2 text-gray-500">
-                                            <Users className="h-4 w-4" /> Khách hàng
-                                        </div>
-                                        <span className="font-bold">{store._count?.customers || 0}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between text-sm">
-                                        <div className="flex items-center gap-2 text-gray-500">
-                                            <Calendar className="h-4 w-4" /> Ngày tạo
-                                        </div>
-                                        <span className="font-medium text-gray-700">
-                                            {new Date(store.createdAt).toLocaleDateString('vi-VN')}
-                                        </span>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        <Card className="shadow-sm border-none bg-white p-2">
-                            <TabsList className="!h-auto flex flex-col bg-transparent gap-2 p-0 w-full">
-                                <TabsTrigger value="analytics" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <BarChart3 className="h-4 w-4" /> Thống kê
-                                </TabsTrigger>
-                                <TabsTrigger value="ai" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <Bot className="h-4 w-4" /> Cấu hình AI
-                                </TabsTrigger>
-                                <TabsTrigger value="chat" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <MessageSquare className="h-4 w-4" /> Live Chat
-                                </TabsTrigger>
-                                <TabsTrigger value="widget" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <Palette className="h-4 w-4" /> Giao diện Chat
-                                </TabsTrigger>
-                                <TabsTrigger value="knowledge" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <Database className="h-4 w-4" /> Nguồn dữ liệu
-                                </TabsTrigger>
-                                <TabsTrigger value="leads" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <Settings className="h-4 w-4" /> Thu thập Leads
-                                </TabsTrigger>
-                                <TabsTrigger value="integration" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <Store className="h-4 w-4" /> Nhúng Website
-                                </TabsTrigger>
-                                <TabsTrigger value="team" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <Users className="h-4 w-4" /> Đội ngũ
-                                </TabsTrigger>
-                                <TabsTrigger value="scripts" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <FileUp className="h-4 w-4" /> Kịch bản & Từ khóa
-                                </TabsTrigger>
-                                <TabsTrigger value="broadcasts" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <Megaphone className="h-4 w-4" /> Chiến dịch gửi tin
-                                </TabsTrigger>
-                                <TabsTrigger value="integration" className="w-full justify-start gap-3 px-4 py-3 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 transition-all border border-transparent data-[state=active]:border-blue-100 rounded-lg">
-                                    <Share2 className="h-4 w-4" /> Kết nối đa kênh
-                                </TabsTrigger>
-                            </TabsList>
-                        </Card>
-                    </div>
-
-                    {/* Main Config Area */}
-                    <div className="lg:col-span-3">
+            <Tabs value={currentTab} onValueChange={onTabChange} className="w-full">
+                <div className="grid grid-cols-1 gap-6">
+                    {/* Main Config Area - Full Width */}
+                    <div>
                         <Form {...form}>
                             <form onSubmit={form.handleSubmit(onUpdateAI)} className="space-y-6">
                                 <div className="flex items-center justify-end gap-3 bg-white p-3 rounded-xl shadow-sm mb-6 sticky top-6 z-10 border border-gray-100">

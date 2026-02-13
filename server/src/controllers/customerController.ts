@@ -36,6 +36,10 @@ export const getCustomers = async (req: AuthRequest, res: Response): Promise<voi
             where.AND.push({ channel: String(channel) });
         }
 
+        if (req.query.storeId) {
+            where.AND.push({ storeId: String(req.query.storeId) });
+        }
+
         if (where.AND.length === 0) delete where.AND;
 
         const [customers, total] = await Promise.all([
@@ -67,7 +71,7 @@ export const getCustomers = async (req: AuthRequest, res: Response): Promise<voi
 export const createCustomer = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.user?.userId;
-        const { name, email, phoneNumber, gender, channel, image } = req.body;
+        const { name, email, phoneNumber, gender, channel, image, storeId } = req.body;
 
         if (!name) {
             res.status(400).json({ message: 'Name is required' });
@@ -82,7 +86,8 @@ export const createCustomer = async (req: AuthRequest, res: Response): Promise<v
                 gender: gender ? (String(gender) as Gender) : undefined,
                 channel: channel ? String(channel) : "Website",
                 image: image ? String(image) : undefined,
-                userId: String(userId)
+                userId: String(userId),
+                storeId: storeId ? String(storeId) : undefined
             }
         });
 

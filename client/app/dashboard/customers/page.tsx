@@ -17,7 +17,7 @@ import {
     MapPin,
     Calendar
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -100,6 +100,9 @@ export default function CustomersPage() {
     });
 
 
+    const searchParams = useSearchParams();
+    const storeId = searchParams.get("storeId");
+
     // Fetch Customers
     const fetchCustomers = async () => {
         setLoading(true);
@@ -113,6 +116,10 @@ export default function CustomersPage() {
             if (filterTab !== "all") {
                 url += `&gender=${filterTab.toUpperCase()}`; // Example: using gender as a placeholder for visitor/lead if needed
             }
+            if (storeId) {
+                url += `&storeId=${storeId}`;
+            }
+
             const res = await fetch(url, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -140,7 +147,7 @@ export default function CustomersPage() {
             fetchCustomers();
         }, 300);
         return () => clearTimeout(timer);
-    }, [search, filterTab]);
+    }, [search, filterTab, storeId]);
 
     const onCreateCustomer = async (values: CustomerFormValues) => {
         setIsSubmitting(true);
@@ -156,7 +163,7 @@ export default function CustomersPage() {
                     "Content-Type": "application/json",
                     Authorization: `Bearer ${token}`
                 },
-                body: JSON.stringify(values)
+                body: JSON.stringify({ ...values, storeId })
             });
 
             if (res.status === 401 || res.status === 403) {
