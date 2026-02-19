@@ -14,10 +14,10 @@ export function Footer() {
                     </span>
                 </div>
                 <div className="flex gap-4 text-sm text-gray-500 dark:text-gray-400">
-                    <Link className="hover:underline" href="#">
+                    <Link className="hover:underline" href="/terms">
                         Điều khoản sử dụng
                     </Link>
-                    <Link className="hover:underline" href="#">
+                    <Link className="hover:underline" href="/privacy">
                         Chính sách bảo mật
                     </Link>
                     <Link className="hover:underline" href="#">

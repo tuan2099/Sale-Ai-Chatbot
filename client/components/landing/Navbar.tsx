@@ -13,10 +13,10 @@ export function Navbar() {
                     <span>Sale AI Chatbot</span>
                 </Link>
                 <div className="hidden md:flex gap-6 text-sm font-medium">
-                    <Link className="hover:text-blue-600 transition-colors" href="#features">
+                    <Link className="hover:text-blue-600 transition-colors" href="/#features">
                         Tính năng
                     </Link>
-                    <Link className="hover:text-blue-600 transition-colors" href="#pricing">
+                    <Link className="hover:text-blue-600 transition-colors" href="/pricing">
                         Bảng giá
                     </Link>
                     <Link className="hover:text-blue-600 transition-colors" href="/dashboard/guide">
