@@ -85,6 +85,12 @@ export default function DashboardLayout({
                                         <UserIcon className="mr-2 h-4 w-4" />
                                         <span>Thông tin cá nhân</span>
                                     </DropdownMenuItem>
+                                    {user?.role === 'ADMIN' && (
+                                        <DropdownMenuItem onClick={() => router.push("/admin/users")} className="text-red-600 focus:text-red-600 foocus:bg-red-50">
+                                            <UserIcon className="mr-2 h-4 w-4" />
+                                            <span>Quản trị viên</span>
+                                        </DropdownMenuItem>
+                                    )}
                                     <DropdownMenuItem onClick={handleLogout} className="text-red-600 bg-red-50 focus:bg-red-100 focus:text-red-600">
                                         <LogOut className="mr-2 h-4 w-4" />
                                         <span>Đăng xuất</span>

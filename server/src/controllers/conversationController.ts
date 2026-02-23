@@ -270,7 +270,10 @@ export const submitMessageCorrection = async (req: Request, res: Response): Prom
             where: { id },
             include: {
                 conversation: {
-                    include: { store: true }
+                    include: {
+                        store: true,
+                        customer: true
+                    }
                 }
             }
         });
@@ -284,6 +287,43 @@ export const submitMessageCorrection = async (req: Request, res: Response): Prom
             where: { id },
             data: { correctedContent }
         });
+
+        // --- AI Self-Learning Logic ---
+        try {
+            // 1. Find the User message that preceded this AI response
+            const lastUserMessage = await (prisma as any).message.findFirst({
+                where: {
+                    conversationId: message.conversationId,
+                    role: "USER",
+                    createdAt: {
+                        lt: message.createdAt
+                    }
+                },
+                orderBy: {
+                    createdAt: 'desc'
+                }
+            });
+
+            if (lastUserMessage) {
+                // 2. Create a new Knowledge entry
+                const customerName = message.conversation.customer?.name || "Khách hàng";
+                await (prisma as any).knowledge.create({
+                    data: {
+                        storeId: message.conversation.storeId,
+                        name: `Học từ hội thoại - ${customerName} - ${new Date().toLocaleDateString('vi-VN')}`,
+                        content: `Q: ${lastUserMessage.content}\nA: ${correctedContent}`,
+                        type: 'MANUAL',
+                        status: 'COMPLETED'
+                    }
+                });
+                console.log(`[LEARNING] Created new knowledge from correction for store ${message.conversation.storeId}`);
+            } else {
+                console.log(`[LEARNING] Could not find user question for message ${id}`);
+            }
+        } catch (learnError) {
+            console.error('[LEARNING] Error creating knowledge:', learnError);
+            // Don't fail the request if learning fails
+        }
 
         res.status(200).json(updated);
     } catch (error) {

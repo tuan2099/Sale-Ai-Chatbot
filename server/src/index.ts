@@ -30,6 +30,7 @@ app.use(passport.initialize());
 import scriptRoutes from './routes/scriptRoutes';
 import broadcastRoutes from './routes/broadcastRoutes';
 import webhookRoutes from './routes/webhookRoutes';
+import paymentRoutes from './routes/paymentRoutes';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/user', userRoutes);
@@ -43,6 +44,7 @@ app.use('/api/team', teamRoutes);
 app.use('/api/scripts', scriptRoutes);
 app.use('/api/broadcasts', broadcastRoutes);
 app.use('/api/webhook', webhookRoutes);
+app.use('/api/payment', paymentRoutes);
 
 app.get('/', (req, res) => {
     res.send('Sale AI Backend is running!');

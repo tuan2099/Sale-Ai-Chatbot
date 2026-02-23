@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 
 import { Navbar } from "@/components/landing/Navbar";
 import { Footer } from "@/components/landing/Footer";
@@ -7,6 +8,49 @@ import { Check, Info, Star } from "lucide-react";
 import Link from "next/link";
 
 export default function PricingPage() {
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [selectedPlan, setSelectedPlan] = useState<{ name: string, price: number, code: string } | null>(null);
+    const [qrData, setQrData] = useState<{ qrUrl: string, content: string } | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    const handleUpgrade = async (planName: string, price: number, planCode: string) => {
+        setSelectedPlan({ name: planName, price, code: planCode });
+        setShowPaymentModal(true);
+        setLoading(true);
+        setQrData(null);
+
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                // Redirect to login if not logged in
+                window.location.href = '/auth/login';
+                return;
+            }
+
+            const res = await fetch('http://localhost:5000/api/payment/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    plan: planCode,
+                    amount: price
+                })
+            });
+
+            if (!res.ok) throw new Error('Failed to create payment');
+
+            const data = await res.json();
+            setQrData({ qrUrl: data.qrUrl, content: data.transferContent });
+        } catch (error) {
+            console.error(error);
+            // toast.error("Có lỗi xảy ra khi tạo giao dịch");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="flex min-h-screen flex-col bg-slate-50 dark:bg-black">
             <Navbar />
@@ -95,7 +139,10 @@ export default function PricingPage() {
                                 ))}
                             </ul>
                         </div>
-                        <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 shadow-lg">
+                        <Button
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200 shadow-lg"
+                            onClick={() => handleUpgrade("Sale AI Standard", 349000, "STANDARD")}
+                        >
                             Nâng cấp ngay
                         </Button>
                     </div>
@@ -139,8 +186,11 @@ export default function PricingPage() {
                                 ))}
                             </ul>
                         </div>
-                        <Button className="w-full" variant="outline">
-                            Liên hệ tư vấn
+                        <Button
+                            className="w-full" variant="outline"
+                            onClick={() => handleUpgrade("Sale AI Pro", 819000, "PRO")}
+                        >
+                            Nâng cấp ngay
                         </Button>
                     </div>
 
@@ -182,13 +232,81 @@ export default function PricingPage() {
                                 ))}
                             </ul>
                         </div>
-                        <Button className="w-full" variant="outline">
-                            Liên hệ Enterprise
+                        <Button
+                            className="w-full" variant="outline"
+                            onClick={() => handleUpgrade("Sale AI Enterprise", 3199000, "ENTERPRISE")}
+                        >
+                            Nâng cấp ngay
                         </Button>
                     </div>
                 </div>
             </main>
             <Footer />
+
+            {/* Payment Modal */}
+            {showPaymentModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h3 className="text-xl font-bold">Thanh Toán An Toàn</h3>
+                                <button onClick={() => setShowPaymentModal(false)} className="text-gray-400 hover:text-gray-600">
+                                    <span className="sr-only">Close</span>
+                                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {loading ? (
+                                <div className="flex flex-col items-center justify-center py-12">
+                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                                    <p className="text-gray-500">Đang tạo mã thanh toán...</p>
+                                </div>
+                            ) : qrData ? (
+                                <div className="flex flex-col items-center space-y-6">
+                                    <div className="text-center">
+                                        <p className="text-sm text-gray-500 mb-1">Thanh toán cho gói</p>
+                                        <p className="text-lg font-bold text-blue-600">{selectedPlan?.name}</p>
+                                        <p className="text-2xl font-bold mt-2">{selectedPlan?.price.toLocaleString('vi-VN')} đ</p>
+                                    </div>
+
+                                    <div className="relative group">
+                                        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-lg blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+                                        <img
+                                            src={qrData.qrUrl}
+                                            alt="Mã QR Thanh Toán"
+                                            className="relative w-64 h-64 rounded-lg shadow-inner bg-white p-2"
+                                        />
+                                    </div>
+
+                                    <div className="w-full bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800 text-center">
+                                        <p className="text-xs text-gray-500 uppercase font-bold mb-2">Nội dung chuyển khoản (Bắt buộc)</p>
+                                        <div className="flex items-center justify-center gap-2">
+                                            <code className="bg-white dark:bg-black px-3 py-1.5 rounded border font-mono text-lg font-bold text-blue-600 select-all">
+                                                {qrData.content}
+                                            </code>
+                                        </div>
+                                        <p className="text-xs text-red-500 mt-2 italic">* Vui lòng nhập chính xác nội dung này</p>
+                                    </div>
+
+                                    <p className="text-center text-sm text-gray-500">
+                                        Hệ thống sẽ tự động kích hoạt gói ngay khi nhận được tiền (thường trong 1-3 phút).
+                                    </p>
+
+                                    <Button onClick={() => setShowPaymentModal(false)} className="w-full" variant="outline">
+                                        Tôi đã chuyển khoản
+                                    </Button>
+                                </div>
+                            ) : (
+                                <div className="text-center text-red-500">
+                                    Không thể tạo mã thanh toán. Vui lòng thử lại.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

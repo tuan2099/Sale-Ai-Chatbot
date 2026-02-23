@@ -34,6 +34,8 @@ model User {
   stores        Store[]
   notes         Note[]
   members       StoreMember[]
+  subscription  Subscription?
+  transactions  Transaction[]
 }
 
 model Account {
@@ -124,7 +126,10 @@ model Store {
   
   // Zalo Integration
   zaloOaId              String?
-  zaloAccessToken       String?
+  zaloAccessToken       String? @db.Text
+  zaloRefreshToken      String? @db.Text
+  zaloAppId             String?
+  zaloSecretKey         String?
 
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -290,4 +295,52 @@ model Broadcast {
   store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@index([storeId])
+}
+
+enum PlanType {
+  FREE
+  STANDARD
+  PRO
+  ENTERPRISE
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  plan      PlanType @default(FREE)
+  
+  // Usage Tracking (Reset monthly via cron/logic)
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd   DateTime?
+  
+  aiMessageCount     Int      @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+}
+
+model Transaction {
+  id              String        @id @default(cuid())
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  checkoutUrl     String?
+  amount          Int
+  description     String
+  status          PaymentStatus @default(PENDING)
+  
+  gatewayTransactionId String?
+  
+  plan            PlanType
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }

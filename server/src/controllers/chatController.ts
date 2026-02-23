@@ -3,6 +3,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { OpenAI } from 'openai';
 import { PrismaClient } from '@prisma/client';
 import dotenv from 'dotenv';
+import { SubscriptionService } from '../services/subscriptionService';
 
 dotenv.config();
 
@@ -127,7 +128,35 @@ export const handleChatMessage = async (req: Request, res: Response): Promise<vo
             return;
         }
 
-        // 5. Check for Scripted Auto-Replies (Keyword Match)
+        // 5. Check Subscription Limit (AI Usage)
+        const canChat = await SubscriptionService.canSendAiMessage(store.userId);
+        if (!canChat) {
+            console.log(`[CHAT LOG] Subscription limit reached for user ${store.userId}`);
+            const limitMsg = "Gói dịch vụ của bạn đã hết hạn mức tin nhắn AI. Vui lòng nâng cấp để tiếp tục sử dụng.";
+
+            await (prisma as any).message.create({
+                data: {
+                    conversationId: conversation.id,
+                    role: 'AI',
+                    content: limitMsg
+                }
+            });
+
+            await (prisma as any).conversation.update({
+                where: { id: conversation.id },
+                data: { lastMessage: limitMsg, updatedAt: new Date() }
+            });
+
+            res.status(200).json({
+                role: 'AI',
+                content: limitMsg,
+                conversationId: conversation.id,
+                isLimitReached: true
+            });
+            return;
+        }
+
+        // 6. Check for Scripted Auto-Replies (Keyword Match)
         // Only check if AI is NOT suspended (or maybe even if it is? Let's assume Script overrides everything except manual mode... 
         // actually if Manual Mode is ON, we shouldn't reply at all. So check this AFTER the isAiSuspended check)
 
@@ -266,6 +295,9 @@ LƯU Ý: Trả lời bằng Tiếng Việt. Chỉ nói về cửa hàng.
                 updatedAt: new Date()
             }
         });
+
+        // Increment AI Usage
+        await SubscriptionService.incrementAiUsage(store.userId);
 
         res.status(200).json({
             role: 'AI',

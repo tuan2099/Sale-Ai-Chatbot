@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { AuthRequest } from '../middleware/authMiddleware';
+import { SubscriptionService } from '../services/subscriptionService';
 
 const prisma = new PrismaClient();
 
@@ -119,6 +120,16 @@ export const createStore = async (req: AuthRequest, res: Response): Promise<void
             return;
         }
 
+        // Check Subscription Limit
+        const canCreate = await SubscriptionService.canCreateStore(String(userId));
+        if (!canCreate) {
+            res.status(403).json({
+                message: 'Bạn đã đạt giới hạn số lượng cửa hàng cho tài khoản này. Vui lòng nâng cấp gói cước để tạo thêm.',
+                code: 'LIMIT_REACHED'
+            });
+            return;
+        }
+
         const store = await prisma.store.create({
             data: {
                 name: String(name),
@@ -197,6 +208,9 @@ export const updateStore = async (req: AuthRequest, res: Response): Promise<void
                 fbAccessToken: data.fbAccessToken !== undefined ? String(data.fbAccessToken) : undefined,
                 zaloOaId: data.zaloOaId !== undefined ? String(data.zaloOaId) : undefined,
                 zaloAccessToken: data.zaloAccessToken !== undefined ? String(data.zaloAccessToken) : undefined,
+                zaloAppId: data.zaloAppId !== undefined ? String(data.zaloAppId) : undefined,
+                zaloSecretKey: data.zaloSecretKey !== undefined ? String(data.zaloSecretKey) : undefined,
+                zaloRefreshToken: data.zaloRefreshToken !== undefined ? String(data.zaloRefreshToken) : undefined,
             }
         });
 

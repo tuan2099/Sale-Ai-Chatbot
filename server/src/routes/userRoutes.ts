@@ -10,5 +10,10 @@ router.put('/profile', authenticateToken, updateProfile);
 router.post('/change-password', authenticateToken, changePassword);
 router.post('/avatar', authenticateToken, upload.single('avatar'), uploadAvatar);
 
+// Admin Routes
+import { getAllUsers, updateUserPlan } from '../controllers/userController';
+router.get('/admin/users', authenticateToken, getAllUsers);
+router.post('/admin/plan', authenticateToken, updateUserPlan);
+
 export default router;
 

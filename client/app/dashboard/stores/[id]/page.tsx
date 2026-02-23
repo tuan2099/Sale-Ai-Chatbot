@@ -25,7 +25,8 @@ import {
     Megaphone,
     Share2,
     Copy,
-    Check
+    Check,
+    ChevronDown
 } from "lucide-react";
 import { AnalyticsTab } from "@/components/store/AnalyticsTab";
 import { useForm } from "react-hook-form";
@@ -170,7 +171,11 @@ export default function StoreDetailsPage() {
     const [fbAccessToken, setFbAccessToken] = useState("");
     const [zaloOaId, setZaloOaId] = useState("");
     const [zaloAccessToken, setZaloAccessToken] = useState("");
+    const [zaloAppId, setZaloAppId] = useState("");
+    const [zaloSecretKey, setZaloSecretKey] = useState("");
+    const [zaloRefreshToken, setZaloRefreshToken] = useState("");
     const [isSavingIntegration, setIsSavingIntegration] = useState(false);
+    const [showAdvancedZalo, setShowAdvancedZalo] = useState(false);
 
     const fetchBroadcasts = async () => {
         try {
@@ -239,7 +244,10 @@ export default function StoreDetailsPage() {
                     fbPageId,
                     fbAccessToken,
                     zaloOaId,
-                    zaloAccessToken
+                    zaloAccessToken,
+                    zaloAppId,
+                    zaloSecretKey,
+                    zaloRefreshToken
                 })
             });
 
@@ -646,6 +654,16 @@ export default function StoreDetailsPage() {
             if (res.ok) {
                 const data = await res.json();
                 setStore(data);
+
+                // Set Integration States
+                setFbPageId(data.fbPageId || "");
+                setFbAccessToken(data.fbAccessToken || "");
+                setZaloOaId(data.zaloOaId || "");
+                setZaloAccessToken(data.zaloAccessToken || "");
+                setZaloAppId(data.zaloAppId || "");
+                setZaloSecretKey(data.zaloSecretKey || "");
+                setZaloRefreshToken(data.zaloRefreshToken || "");
+
                 form.reset({
                     aiName: data.aiName || "AI Assistant",
                     aiDescription: data.aiDescription || "",
@@ -1589,25 +1607,73 @@ export default function StoreDetailsPage() {
                                                 </CardDescription>
                                             </CardHeader>
                                             <CardContent className="space-y-4">
-                                                <div className="space-y-2">
-                                                    <label className="text-sm font-medium">OA ID</label>
-                                                    <Input
-                                                        placeholder="Nhập Zalo OA ID..."
-                                                        value={zaloOaId}
-                                                        onChange={(e) => setZaloOaId(e.target.value)}
-                                                    />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <label className="text-sm font-medium">OA Access Token</label>
-                                                    <Input
-                                                        type="password"
-                                                        placeholder="Nhập Access Token..."
-                                                        value={zaloAccessToken}
-                                                        onChange={(e) => setZaloAccessToken(e.target.value)}
-                                                    />
-                                                    <p className="text-xs text-gray-500">
-                                                        Token Zalo thường hết hạn sau 24h (trừ khi dùng Refresh Token).
-                                                    </p>
+                                                <div className="space-y-4">
+                                                    <div className="space-y-2">
+                                                        <label className="text-sm font-medium">OA ID</label>
+                                                        <Input
+                                                            placeholder="Nhập Zalo OA ID..."
+                                                            value={zaloOaId}
+                                                            onChange={(e) => setZaloOaId(e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <label className="text-sm font-medium">OA Access Token</label>
+                                                        <Input
+                                                            type="password"
+                                                            placeholder="Nhập Access Token (lần đầu)..."
+                                                            value={zaloAccessToken}
+                                                            onChange={(e) => setZaloAccessToken(e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div className="pt-2">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            className="w-full text-blue-600 hover:text-blue-800 hover:bg-blue-50 flex justify-between items-center text-sm font-medium"
+                                                            onClick={() => setShowAdvancedZalo(!showAdvancedZalo)}
+                                                        >
+                                                            <span>Cấu hình tự động mớm Token (Nâng cao)</span>
+                                                            <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${showAdvancedZalo ? 'rotate-180' : ''}`} />
+                                                        </Button>
+
+                                                        {showAdvancedZalo && (
+                                                            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-100 space-y-3 shadow-inner">
+                                                                <p className="text-xs text-gray-500 flex items-center gap-1.5 bg-yellow-50 text-yellow-800 p-2 rounded-md border border-yellow-200">
+                                                                    <Info className="h-4 w-4 flex-shrink-0" />
+                                                                    <span><strong>Ghi chú:</strong> Zalo Access Token hết hạn sau 25h. Điền App ID, Secret Key và Refresh Token để chatbot tự động làm mới thẻ.</span>
+                                                                </p>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-xs font-semibold text-gray-700">App ID</label>
+                                                                    <Input
+                                                                        placeholder="Nhập Zalo App ID..."
+                                                                        value={zaloAppId}
+                                                                        onChange={(e) => setZaloAppId(e.target.value)}
+                                                                        className="bg-white"
+                                                                    />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-xs font-semibold text-gray-700">App Secret Key</label>
+                                                                    <Input
+                                                                        type="password"
+                                                                        placeholder="Nhập Zalo App Secret Key..."
+                                                                        value={zaloSecretKey}
+                                                                        onChange={(e) => setZaloSecretKey(e.target.value)}
+                                                                        className="bg-white"
+                                                                    />
+                                                                </div>
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-xs font-semibold text-gray-700">Refresh Token</label>
+                                                                    <Input
+                                                                        type="password"
+                                                                        placeholder="Nhập Zalo Refresh Token..."
+                                                                        value={zaloRefreshToken}
+                                                                        onChange={(e) => setZaloRefreshToken(e.target.value)}
+                                                                        className="bg-white"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </CardContent>
                                         </Card>
